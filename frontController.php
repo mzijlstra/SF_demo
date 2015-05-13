@@ -15,7 +15,7 @@
 // important internal global variables ($SF_*)
 $__self = filter_input(INPUT_SERVER, "PHP_SELF", FILTER_SANITIZE_URL);
 $__self_match = array();
-preg_match("|(.*)/index.php|", $__self, $__self_match);
+preg_match("|(.*)/frontController.php|", $__self, $__self_match);
 $SF_BASE = $__self_match[1];
 
 $__the_uri = filter_input(INPUT_SERVER, "REQUEST_URI", FILTER_SANITIZE_URL);
