@@ -27,7 +27,7 @@ $sec = array(
 $my_policy = "admin";
 
 foreach ($sec as $pattern => $policy) {
-    list($meth, $uri) = split("@", $pattern); 
+    list($meth, $uri) = explode("@", $pattern); 
     if ($meth === $SF_METHOD && preg_match($uri, $SF_URI)) {
         $my_policy = $policy;
         break;
