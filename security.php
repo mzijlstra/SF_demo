@@ -23,19 +23,6 @@ $sec = array(
 /* ****************************
  * Do actual Security checks
  * ************************** */
-
-function isLoggedIn() {
-    global $SF_BASE;
-    global $SF_URI;
-    if (!isset($_SESSION['admin'])) {
-        // store the original request URI, so we can return after login
-        $_SESSION['location'] = $SF_URI;
-        $_SESSION['error'] = "Please Login First";
-        header("Location: $SF_BASE/login");
-        exit();
-    }    
-}
-
 // set default policy -- in case we don't find a match in $sec
 $my_policy = "admin";
 
@@ -59,3 +46,16 @@ switch ($my_policy) {
             exit();
         }
 }
+
+function isLoggedIn() {
+    global $SF_BASE;
+    global $SF_URI;
+    if (!isset($_SESSION['admin'])) {
+        // store the original request URI, so we can return after login
+        $_SESSION['location'] = $SF_URI;
+        $_SESSION['error'] = "Please Login First";
+        header("Location: $SF_BASE/login");
+        exit();
+    }    
+}
+
