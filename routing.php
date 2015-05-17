@@ -111,7 +111,9 @@ function matchUriToCtrl($ctrls) {
         if (preg_match($pattern, $SF_URI, $URI_PARAMS)) {
             list($class, $method) = explode(".", $dispatch);
             $view = invokeCtrlMethod($class, $method);
-            applyView($view);
+            if ($view) {
+                applyView($view);
+            }
         }
     }
     // page not found (security mapping exists, but no ctrl mapping)
