@@ -1,19 +1,19 @@
 <?php
-
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-
 /**
  * Description of UserCtrl
  *
  * @author mzijlstra
+ * 
+ * @Controller
  */
 class UserCtrl {
-    // POST /login
+    /**
+     * @POST(uri="^/login$")
+     * 
+     * @return string
+     */
     public function login() {
+        global $MY_BASE;
         // start session, and clean any login errors 
         unset($_SESSION['error']);
 
@@ -24,11 +24,16 @@ class UserCtrl {
             // prevent session fixation
             session_regenerate_id();
 
-            // set admin
-            $_SESSION['admin'] = true;
+            // set current user details
+            $_SESSION['user'] = array(
+                "id" => 1,
+                "first" => "admin",
+                "last" => "istrator",
+                "role" => "admin"
+            );
             
             // default return location
-            $location = "/car";
+            $location = "$MY_BASE/car";
             if (isset($_SESSION['location'])) {
                 $location = $_SESSION['location'];
                 unset($_SESSION['location']);
@@ -43,6 +48,11 @@ class UserCtrl {
     }
     
     // GET /logout
+    /**
+     * @GET(uri="^/logout$")
+     * 
+     * @return string
+     */
     public function logout() {
         session_destroy();
         $_SESSION['error'] = "Logged Out";

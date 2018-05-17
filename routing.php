@@ -4,42 +4,113 @@
  * Michael Zijlstra 11/15/2014
  */
 
-/* * **************************************
- * Setup routing arrays
- * ************************************** */
-// Requests that don't need a controller aka 'view controllers'
-$view_ctrl = array(
-    "|^/$|" => "welcome.php",
-    "|^/index.php$|" => "welcome.php",
-    "|^/login$|" => "login.php",
-    "|^/car/add$|" => "carDetail.php",
-);
+/**
+ * Helper function to check what kind of view should be displayed
+ * 
+ * @param type $data either string for HTML view or data for JSON
+ */
 
-// Get requests that need a controller
-$get_ctrl = array(
-    "|^/car$|" => "CarCtrl.all",
-    "|^/car/(\d+)$|" => "CarCtrl.get",
-    "|^/logout$|" => "UserCtrl.logout",
-);
+function view($data) {
+    if (is_string($data)) {
+        htmlView($data);
+    } else if ($data) {
+        print json_encode($data);
+    } else {
+        htmlView("error/500.php");
+    }
+    // always exit after displaying the view, do we want a hook?
+    exit();
+}
 
-// Post requests that need a controller
-$post_ctrl = array(
-    "|^/login$|" => "UserCtrl.login",
-    "|^/car/add$|" => "CarCtrl.add",
-    "|^/car/(\d+)$|" => "CarCtrl.upd",
-    "|^/car/(\d+)/del$|" => "CarCtrl.del",
-);
+function recHtmlSpecial(&$data) {
+    if (is_string($data)) {
+        return htmlspecialchars($data);
+    }
+    if (is_array($data)) {
+        foreach ($data as $k => $v) {
+            $data[htmlspecialchars($k)] = recHtmlSpecial($v);
+        }
+    }
+    return $data;
+}
 
-/* * **************************************
- * Do actual routing
- * ************************************** */
-require 'context.php';
+/**
+ * Helper function to redirect to a GET or display an HTML page
+ * 
+ * @global array $VIEW_DATA any data that the view may need in order to render
+ * @param string $view the name of the view file to include before exiting, 
+ * or alternately for redirects a location header string
+ */
+function htmlView($view) {
+    global $VIEW_DATA;
+    if (preg_match("/^Location: /", $view)) {
+        if ($VIEW_DATA) {
+            $_SESSION['redirect'] = $view;
+            $_SESSION['flash_data'] = $VIEW_DATA;
+        }
+        header($view);
+    } else {
+        // make keys in VIEW_DATA available as regular variables
+        foreach ($VIEW_DATA as $key => $value) {
+            $$key = recHtmlSpecial($value);
+        }
+        require "view/$view";
+    }
+}
 
-// Do the actual dispatch, which will invoke the helper methods below
-switch ($SF_METHOD) {
+/**
+ * Helper function that tries to match the request URI to a controller method 
+ * and invoke it, returning the view string returned from the controller method
+ * 
+ * @global string $MY_URI the request URI as shown in the browser
+ * @global array $URI_PARAMS empty array into which the matched controller
+ * can put key/value pairs for any URI params it may extract
+ * @param array $ctrls the $get_ctrl or $post_ctrl array containing URI to 
+ * controller @ method mappings
+ * @return string the view string returned by the matched controller
+ */
+function matchUriToMethod($ctrls) {
+    global $MY_URI;
+    global $URI_PARAMS;
+
+    // check controler mappings
+    foreach ($ctrls as $pattern => $dispatch) {
+        if (preg_match($pattern, $MY_URI, $URI_PARAMS)) {
+            // finding match completes method
+            list($class, $method) = explode("@", $dispatch);
+            return invokeMethod($class, $method);
+        }
+    }
+    // was not able to find a match here
+    return null;
+}
+
+/**
+ * Helper function that actually invokes the found controller method
+ * 
+ * @param string $class Class name of the controller
+ * @param string $method method name that should be invoked
+ * @return string the view string returned by the controller method
+ */
+function invokeMethod($class, $method) {
+    try {
+        $context = new Context();
+        $controler = $context->get($class);
+        return $controler->{$method}();
+    } catch (Exception $e) {
+        // Perhaps have some user setting for debug mode
+        error_log($e->getMessage());
+        print $e->getMessage();
+        return "error/500.php";
+    }
+}
+
+// The logic to do the actual routing dispatch, using the above helper functions
+// and the $view_ctrl, $get_ctrl, $post_ctrl arrays from the context
+switch ($MY_METHOD) {
     case "GET":
         // check for redirect flash attributes
-        if (isset($_SESSION['redirect']) && $_SESSION['redirect'] == $SF_URI) {
+        if (isset($_SESSION['redirect']) && $_SESSION['redirect'] == $MY_URI) {
             foreach ($_SESSION['flash_data'] as $key => $val) {
                 $VIEW_DATA[$key] = $val;
             }
@@ -49,93 +120,29 @@ switch ($SF_METHOD) {
 
         // check view controlers
         foreach ($view_ctrl as $pattern => $file) {
-            if (preg_match($pattern, $SF_URI, $URI_PARAMS)) {
-                applyView($file);
+            if (preg_match($pattern, $MY_URI, $URI_PARAMS)) {
+                view($file);
             }
         }
         // check get controllers
-        matchUriToCtrl($get_ctrl);
+        $view = matchUriToMethod($get_ctrl);
+        if ($view) {
+            view($view);
+        }
+
+        // page not found (security mapping exists, but not ctrl mapping)
+        view("error/404.php");
         break;
     case "POST":
         // check post controlers
-        matchUriToCtrl($post_ctrl);
+        $view = matchUriToMethod($post_ctrl);
+        if ($view) {
+            view($view);
+        }
+
+        // page not found (security mapping exists, but not ctrl mapping)
+        view("error/404.php");
         break;
-    case "PUT":
-    case "DELETE":
     default:
-        http_response_code(403);
-        echo "403 Access Forbidden";
-        exit();
+        view("error/500.php");
 }
-
-
-function applyView($view) {
-    global $VIEW_DATA;
-    global $SF_METHOD;
-    global $SF_BASE;
-    $uri = array();
-
-    // check if it's a redirect, or display indicated view file
-    if (preg_match("|^Location: (.*)|", $view, $uri)) {
-        // view_data for a redirect becomes flash data
-        if ($VIEW_DATA) {
-            $_SESSION['redirect'] = $uri[1];
-            $_SESSION['flash_data'] = $VIEW_DATA;
-        }
-        // change absolute uri's to be absolute to our project
-        if ($uri[1][0] === "/") {
-            $view = preg_replace("|Location: /|", "Location: $SF_BASE/", $view);
-        }
-        header($view);
-    } else { 
-        // don't display a view on post
-        if ($SF_METHOD == "POST") {
-            die("Please Use the Post/Redirect/Get Pattern");
-        }
-        // make keys in VIEW_DATA available as regular variables inside view
-        foreach ($VIEW_DATA as $key => $value) {
-            $$key = $value;
-        }
-        require "view/$view";
-    }
-    // always exit after displaying the view, do we want a hook?
-    exit();
-}
-
-function matchUriToCtrl($ctrls) {
-    global $SF_URI;
-    global $URI_PARAMS;
-
-    // check given controlers
-    foreach ($ctrls as $pattern => $dispatch) {
-        if (preg_match($pattern, $SF_URI, $URI_PARAMS)) {
-            list($class, $method) = explode(".", $dispatch);
-            $view = invokeCtrlMethod($class, $method);
-            if ($view) {
-                applyView($view);
-            }
-        }
-    }
-    // page not found (security mapping exists, but no ctrl mapping)
-    http_response_code(404);
-    echo "404 Page Not Found";
-    exit();
-}
-
-function invokeCtrlMethod($class, $method) {
-    $context = new Context();
-    $getControler = new ReflectionMethod("Context", "get" . $class);
-    $controler = $getControler->invoke($context);
-    $doMethod = new ReflectionMethod($class, $method);
-
-    try {
-        return $doMethod->invoke($controler, $method);
-    } catch (Exception $e) {
-        // TODO: have some user setting for debug mode
-        error_log($e->getMessage());
-        http_response_code(500);
-        echo "500 Internal Server Error";
-        exit();
-    }
-}
-

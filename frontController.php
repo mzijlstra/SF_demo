@@ -2,42 +2,68 @@
 /*
  * Michael Zijlstra 11/14/2014
  */
+/* ******************************
+ * Configuration variables
+ * **************************** */
+define("DEVELOPMENT", true);
+define("DSN", "mysql:dbname=sf_demo;host=localhost");
+define("DB_USER", "root");
+define("DB_PASS", "root");
 
-/* ************************************************************
- * -- FRONT CONTROLLER --
- * This is the entry point for every page in the application
- * ********************************************************** */
+$SEC_ROLES = array(
+    "none" => [], 
+    "user" => ["none"],
+    "admin" => ["user", "none"]
+);
 
 /* ******************************
  * Initialize Globals
  * **************************** */
+$__self = filter_input(INPUT_SERVER, "PHP_SELF", FILTER_SANITIZE_URL);          
+$matches = array();
+preg_match("|(.*)/frontController.php|", $__self, $matches);               
+$MY_BASE = $matches[1];   
 
-// important internal global variables ($SF_*)
-$__self = filter_input(INPUT_SERVER, "PHP_SELF", FILTER_SANITIZE_URL);
-$__self_match = array();
-preg_match("|(.*)/frontController.php|", $__self, $__self_match);
-$SF_BASE = $__self_match[1];
+$the_uri = filter_input(INPUT_SERVER, "REQUEST_URI", FILTER_SANITIZE_URL);
+preg_match("|$MY_BASE(/.*)|", $the_uri, $matches);
+$MY_URI = $matches[1];
 
-$__the_uri = filter_input(INPUT_SERVER, "REQUEST_URI", FILTER_SANITIZE_URL);
-$__uri_match = array();
-preg_match("|$SF_BASE(/.*)|", $__the_uri, $__uri_match);
-
-$SF_URI = $__uri_match[1];
-$SF_METHOD = filter_input(INPUT_SERVER, "REQUEST_METHOD", FILTER_SANITIZE_STRING);
-
-// create global variables for use inside controller methods
+$MY_METHOD = filter_input(INPUT_SERVER, "REQUEST_METHOD", FILTER_SANITIZE_STRING);
 $URI_PARAMS = array(); // populated with URI parameters on URI match in routing
 $VIEW_DATA = array(); // populated by controller, and used by view
 
-// always start the session
+/* *****************************
+ * Include the (generated) application context
+ * **************************** */
+// Setup autoloading for control and model classes
+// TODO move these into the AnnotationContext, so that it automatically adds
+// an additional spl_autoload function for each directory it searches
+spl_autoload_register(function ($class) {
+    include 'control/' . $class . '.class.php';
+});
+spl_autoload_register(function ($class) {
+    include 'model/' . $class . '.class.php';
+});
+
+if (DEVELOPMENT) {
+    require 'AnnotationReader.class.php';
+    $ac = new AnnotationReader();
+    $ac->scan()->create_context();
+    $ac->write("context.php");  # uncomment to generate file
+    eval($ac->context);
+} else {
+    require 'context.php';
+}
+
+// always start the session context
 session_start();
 
 /* ****************************** 
- * Check Security based on URI
+ * Check Security based on context security array
  * **************************** */
 require 'security.php';
 
 /* ****************************** 
- * Do Routing based on URI
+ * Do Routing based on context routing arrays
  * **************************** */
 require 'routing.php';
