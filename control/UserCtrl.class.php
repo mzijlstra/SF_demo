@@ -42,6 +42,7 @@ class UserCtrl {
             return "Location: $location";
         } else {
             $_SESSION['error'] = "Invalid email / pass combo";
+            auditLog("login failed user: $user");
             return "Location: /login";
         }
 

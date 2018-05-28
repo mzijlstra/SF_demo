@@ -9,19 +9,26 @@
  * 
  * @param type $data either string for HTML view or data for JSON
  */
-
 function view($data) {
-    if (is_string($data)) {
+    if (!$data) {
+        // page not found (security mapping exists, but no ctrl mapping)
+        htmlmView("error/404.php");
+    } else if (is_string($data)) {
         htmlView($data);
-    } else if ($data) {
-        print json_encode($data);
     } else {
-        htmlView("error/500.php");
+        print json_encode($data);
     }
     // always exit after displaying the view, do we want a hook?
     exit();
 }
 
+/**
+ * Helper to call htmlspecial char on all strings sent to view (including keys 
+ * in arrays) recursively calls itself in order to process arrays
+ * 
+ * @param mixed $data
+ * @return mixed
+ */
 function recHtmlSpecial(&$data) {
     if (is_string($data)) {
         return htmlspecialchars($data);
@@ -45,7 +52,6 @@ function htmlView($view) {
     global $VIEW_DATA;
     if (preg_match("/^Location: /", $view)) {
         if ($VIEW_DATA) {
-            $_SESSION['redirect'] = $view;
             $_SESSION['flash_data'] = $VIEW_DATA;
         }
         header($view);
@@ -97,10 +103,11 @@ function invokeMethod($class, $method) {
         $context = new Context();
         $controler = $context->get($class);
         return $controler->{$method}();
+    } catch (AuthorizationException $e) {
+        auditLog("DENIED ACCESS: " . $e->getMessage());
+        return "view/error/403.php";
     } catch (Exception $e) {
-        // Perhaps have some user setting for debug mode
         error_log($e->getMessage());
-        print $e->getMessage();
         return "error/500.php";
     }
 }
@@ -110,11 +117,10 @@ function invokeMethod($class, $method) {
 switch ($MY_METHOD) {
     case "GET":
         // check for redirect flash attributes
-        if (isset($_SESSION['redirect']) && $_SESSION['redirect'] == $MY_URI) {
+        if (isset($_SESSION['flash_data'])) {
             foreach ($_SESSION['flash_data'] as $key => $val) {
                 $VIEW_DATA[$key] = $val;
             }
-            unset($_SESSION['redirect']);
             unset($_SESSION['flash_data']);
         }
 
@@ -124,24 +130,13 @@ switch ($MY_METHOD) {
                 view($file);
             }
         }
-        // check get controllers
-        $view = matchUriToMethod($get_ctrl);
-        if ($view) {
-            view($view);
-        }
 
-        // page not found (security mapping exists, but not ctrl mapping)
-        view("error/404.php");
+        // check get controllers
+        view(matchUriToMethod($get_ctrl));
         break;
     case "POST":
         // check post controlers
-        $view = matchUriToMethod($post_ctrl);
-        if ($view) {
-            view($view);
-        }
-
-        // page not found (security mapping exists, but not ctrl mapping)
-        view("error/404.php");
+        view(matchUriToMethod($post_ctrl));
         break;
     default:
         view("error/500.php");

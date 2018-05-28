@@ -1,4 +1,5 @@
 <?php
+
 /*
  * Michael Zijlstra 03 May 2017
  * 
@@ -7,13 +8,13 @@
 
 class AnnotationReader {
 
-    public $sec = array();
-    public $view_ctrl = array();
-    public $get_ctrl = array();
-    public $post_ctrl = array();
-    public $repositories = array();
-    public $services = array();
-    public $controllers = array();
+    private $sec = array();
+    private $view_ctrl = array();
+    private $get_ctrl = array();
+    private $post_ctrl = array();
+    private $repositories = array();
+    private $services = array();
+    private $controllers = array();
     public $context = "";
 
     /**
@@ -44,6 +45,7 @@ class AnnotationReader {
         $matches = array();
         preg_match("#" . $annotation . "\((.*)\)#", $text, $matches);
         $content = $matches[1];
+        // if it's just a single quoted value
         if (preg_match("#^['\"].*['\"]$#", $content)) {
             $content = "value=" . $content;
         }
@@ -106,6 +108,29 @@ class AnnotationReader {
     }
 
     /**
+     * Retrieves the value of the specified annotation (which should have only 
+     * a single value, not multiple key / value pairs). For all the methods of
+     * the given reflection class
+     * 
+     * @param ReflectionClass $reflect_class
+     * @param String $annotation
+     * @return array of method names with the value for the given annotation
+     */
+    private function methods_annotation_val($reflect_class, $annotation) {
+        $methods = array();
+        foreach ($reflect_class->getMethods() as $m) {
+            $com = $m->getDocComment();
+            $value = "";
+            if (preg_match("#$annotation#", $com)) {
+                $attrs = $this->annotation_attributes($annotation, $com);
+                $value = $attrs['value'];
+            }
+            $methods[$m->name] = $value;
+        }
+        return $methods;
+    }
+
+    /**
      * Validate the content of @GET and @POST annotations
      * 
      * @param type $attrs
@@ -164,12 +189,13 @@ class AnnotationReader {
     private function check_repository($class) {
         $r = new ReflectionClass($class);
         $doc = $r->getDocComment();
+        $class_name = $r->getName();
         if (preg_match("#@Repository#", $doc)) {
             $to_inject = $this->to_inject($r);
-            $this->repositories[$class] = $to_inject;
+            $this->repositories[$class_name] = $to_inject;
         }
     }
-    
+
     /**
      * Checks if a class has an @Service annotation, if it does it adds it to 
      * the array of services
@@ -179,10 +205,14 @@ class AnnotationReader {
     private function check_service($class) {
         $r = new ReflectionClass($class);
         $doc = $r->getDocComment();
+        $class_name = $r->getName();
         if (preg_match("#@Service#", $doc)) {
-            $to_inject = $this->to_inject($r);
-            $this->services[$class] = $to_inject;
-        }        
+            $info = array();
+            $info['props'] = $this->to_inject($r);
+            $info['auth'] = $this->methods_annotation_val($r, "@Security");
+            $info['tx_and_log'] = $this->methods_annotation_val($r, "@Service");
+            $this->services[$class_name] = $info;
+        }
     }
 
     /**
@@ -208,10 +238,11 @@ class AnnotationReader {
     private function check_controller($class) {
         $r = new ReflectionClass($class);
         $doc = $r->getDocComment();
+        $class_name = $r->getName();
         if (preg_match("#@Controller#", $doc) ||
                 preg_match("#@WebService#", $doc)) {
             $to_inject = $this->to_inject($r);
-            $this->controllers[$class] = $to_inject;
+            $this->controllers[$class_name] = $to_inject;
             $this->map_requests($r, "GET", "ctrl");
             $this->map_requests($r, "POST", "ctrl");
         }
@@ -255,11 +286,12 @@ class AnnotationReader {
      * @param type $function
      */
     private function scan_classes($directory, $function) {
+        set_include_path(get_include_path() . PATH_SEPARATOR . "$directory");
         $files = scandir($directory);
         foreach ($files as $file) {
             $mats = array();
             // skip hidden files, directories, files that are not .class.php
-            if ($file{0} === "." || 
+            if ($file{0} === "." ||
                     !preg_match("#(.*)\.class\.php#i", $file, $mats)) {
                 continue;
             }
@@ -318,20 +350,73 @@ class AnnotationReader {
     }
 
     /**
+     * Generate the code (text) for a service method
+     * @param type $m
+     * @return type
+     */
+    private function generate_service_proxy_method($m, $info) {
+        if (!$m->isPublic()) {
+            return;
+        }
+        $params = array();
+        $pnames = array();
+        foreach ($m->getParameters() as $p) {
+            if ($p->isOptional()) {
+                $default = $p->getDefaultValue() ? $p->getDefaultValue() : "false";
+                $params[] = "\${$p->name}={$default}";
+            } else {
+                $params[] = "\${$p->name}";
+            }
+            $pnames[] = "\${$p->name}";
+        }
+        $pr = join(", ", $params);
+        $pn = join(", ", $pnames);
+
+        $call = "{$m->class}.{$m->name}";
+        $this->context .= "    public function {$m->name}({$pr}){\n";
+        $this->context .= "        global \$DB;\n";
+        if (isset($info['auth'][$m->name])) {
+            $role = $info['auth'][$m->name];
+            $this->context .= "        if (!isAuthorized('$role')) {\n";
+            $this->context .= "            throw new AuthorizationException('$call');\n";
+            $this->context .= "        }\n";
+        }
+        $tx = false;
+        if (isset($info['tx_and_log'][$m->name]) && $info['tx_and_log'] !== "notx") {
+            $tx = true;
+            $this->context .= "        try {\n";
+            $this->context .= "            \$DB->beginTransaction();\n";
+            if ($info['tx_and_log'][$m->name] !== "nolog") {
+                $this->context .= "            auditLog('$call');\n";
+            }
+        }
+        $this->context .= "            \$result = \$this->actual->{$m->name}({$pn});\n";
+        if ($tx) {
+            $this->context .= "            \$DB->commit();\n";
+            $this->context .= "        } catch (Exception \$e) {\n ";
+            $this->context .= "            \$DB->rollBack();\n";
+            $this->context .= "            throw \$e;\n";
+            $this->context .= "        }\n";
+        }
+        $this->context .= "        return \$result;";
+        $this->context .= "    }\n";
+    }
+
+    /**
      * Generate code (text) for a proxy class for each of the service classes
      */
     private function generate_service_proxies() {
-        foreach ($this->services as $s) {
-            $this->context .= "class Proxy{$s} {\n";
-            $this->context .= "\tprivate \$actual;";
-            $r = new ReflectionClass($s);
+        foreach ($this->services as $service => $info) {
+            $this->context .= "class Proxy{$service} {\n";
+            $this->context .= "    public \$actual;\n";
+            $r = new ReflectionClass($service);
             foreach ($r->getMethods() as $m) {
-                // TODO check if method is public, and fix next line
-                $this->context .= "\tpublic {$m->methodName}";
+                $this->generate_service_proxy_method($m, $info);
             }
+            $this->context .= "}\n";
         }
     }
-    
+
     /**
      * Generate code for the retrievable classes to the context class
      * 
@@ -354,41 +439,58 @@ IF_START;
     }
 
     /**
+     * Generate code for the retrievable service classes to the context class
+     */
+    private function add_services_to_context() {
+        foreach ($this->services as $class => $info) {
+            $injects = $info['props'];
+            $this->context .= <<< IF_START
+        if (\$id === "$class") {
+            \$proxy = new Proxy{$class}();
+            \$this->objects["$class"] = \$proxy;
+            \$actual = new $class();
+
+IF_START;
+            foreach ($injects as $prop => $id) {
+                $this->context .=
+                        "            \$actual->$prop = "
+                        . "\$this->get(\"$id\");\n";
+            }
+            $this->context .= "           \$proxy->actual = \$actual;";
+            $this->context .= "        }\n"; // close if statement
+        }
+    }
+
+    /**
      * Scans the standard directories, reading .php files for annotations
      * 
      * @return AnnotationContext self for call chaining
      */
     public function scan() {
-        $this->scan_classes("model", "check_repository");
-        $this->scan_classes("service", "check_service");
-        $this->scan_classes("control", "check_controller");
+        $this->scan_classes("./model", "check_repository");
+        $this->scan_classes("./service", "check_service");
+        $this->scan_classes("./control", "check_controller");
         $this->scan_view("view");
         return $this;
     }
 
     /**
-     * Creates the context in memory
+     * Creates the context in memory based on the results of scan()
      * 
      * @return AnnotationContext self for call chaining
      */
     public function create_context() {
         $this->generate_security_array();
         $this->generate_routing_arrays();
-        //$this->generate_service_proxies();
-
-        // these values are set in frontController.php
-        $dsn = DSN;
-        $user = DB_USER;
-        $pass = DB_PASS;
+        $this->generate_service_proxies();
 
         $this->context .= <<< HEADER
 class Context {
     private \$objects = array();
     
     public function Context() {
-        \$db = new PDO("$dsn", "$user", "$pass");
-        \$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        \$this->objects["DB"] = \$db;
+        global \$DB;
+        \$this->objects["DB"] = \$DB;
     }
 
     public function get(\$id) {
@@ -400,6 +502,7 @@ HEADER;
 
         $this->add_classes_to_context($this->repositories);
         $this->add_classes_to_context($this->controllers);
+        $this->add_services_to_context();
 
         $this->context .= <<< FOOTER
         return \$this->objects[\$id];

@@ -4,7 +4,7 @@
  * Helper class used in Repository to represent constraining conditions for a 
  * result set.
  */
-class Condition {
+class Constraint {
 
     public $col; // column
     public $op; // operator
@@ -18,6 +18,7 @@ class Condition {
  * @author mzijlstra 2018-02-27
  */
 trait Repository {
+
     /**
      * Helper function to turn an array of condition objects into a string
      * 
@@ -26,10 +27,15 @@ trait Repository {
      */
     private function columns($conditions) {
         $cols = array();
+        $map = array();
         foreach ($conditions as $c) {
             $cols[] = "{$c->col} {$c->op} {$c->val}";
+            $map[$c->col] = $c->val; 
         }
-        return join(" AND ", $cols);
+        $result = array();
+        $result['string']  = join(" AND ", $cols);
+        $result['map'] = $map;
+        return $result;
     }
 
     /**
@@ -43,7 +49,7 @@ trait Repository {
             $columns[] = "$k = :$k ";
         }
         $cols = join(", ", $columns);
-        
+
         // if an id attribute exists it's been created already
         // and therefore we can savely assume it's an update
         if ($e['id']) {
@@ -78,33 +84,41 @@ trait Repository {
 
     /**
      * Function to retrieve results from the database table. Without any params
-     * it returns all rows. Conditions can be used to restrict rows, the order
-     * param can be used to order them, and the size and offset can be used for
-     * pagination.
+     * it returns all rows. Conditions can be used to restrict rows.
      * 
-     * @param array of Condition objects $conditions
-     * @param String $order
-     * @param Number $size
-     * @param Number $offset
-     * @return resultset (array of arrays)
+     * 
+     * @param array $columns of Contraint objects 
+     * @param array $other key / value pairs giving other constraints (like order and size)
+     * @return PDO resultset (array of arrays)
      */
-    public function find($conditions = Null, $order = Null, $size = 0, $offset = 0) {
+    public function find($columns = Null, $other = Null) {
         $query = "SELECT * FROM {$this->table} ";
-        if ($conditions) {
-            $cols = $this->columns($conditions);
-            $query .= " WHERE $cols";
+        $constraints = array();
+
+        if ($columns) {
+            $cols = $this->columns($columns);
+            $query .= " WHERE " . $cols['string'];
+            $constraints = $cols['map'];
         }
-        if ($order) {
-            $query .= " ORDER BY :_order";
-            $conditions['_order'] = $order;
+        if ($other && isset($other['order'])) {
+            $query .= " ORDER BY :_order ";
+            $constraints['_order'] = $other['order'];
+            if (isset($other['direction']) 
+                    && $other['direction'] == "DESC") {
+                $query .= " DESC ";
+            }
         }
-        if ($size) {
-            $query .= " LIMIT :_offset, :_size ";
-            $conditions['_size'] = $size;
-            $conditions['_offset'] = $offset;
+        if ($other && isset($other['size'])) {
+            $constraints['_size'] = $other['size'];
+            if (isset($other['offset'])) {
+                $query .= " LIMIT :_offset, :_size ";
+                $constraints['_offset'] = $other['offset'];
+            } else {
+                $query .= " LIMIT :_size ";
+            }
         }
         $find = $this->db->prepare($query);
-        $find->execute($conditions);
+        $find->execute($constraints);
         return $find->fetchAll();
     }
 
@@ -131,7 +145,7 @@ trait Repository {
      * Returns a count of how many rows in total exist with these conditions. 
      * This is usefull for pagination.
      * 
-     * @param array of Condition objects $conditions
+     * @param array of Constraint objects $conditions
      * @return number
      */
     public function count($conditions = Null) {

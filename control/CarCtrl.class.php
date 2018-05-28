@@ -16,19 +16,11 @@
 class CarCtrl {
 
     /**
-     * @var type 
-     * @Inject('CarDao')
+     * @Inject('CarService')
      */
-    public $carDao;
+    public $carService;
     
-    /**
-     *
-     * @var type 
-     * @Inject('CarTypeDao')
-     */
-    public $carTypeDao;
 
-    // GET /car$
     /**
      * 
      * @global array $VIEW_DATA
@@ -38,7 +30,7 @@ class CarCtrl {
      */
     public function all() {
         global $VIEW_DATA;
-        $VIEW_DATA['cars'] = $this->carDao->find();
+        $VIEW_DATA['cars'] = $this->carService->getCars();
         return "carList.php";
     }
     
@@ -54,8 +46,8 @@ class CarCtrl {
         global $VIEW_DATA;
         global $URI_PARAMS;
         $cid = $URI_PARAMS[1];
-        $VIEW_DATA['car'] = $this->carDao->findById($cid);
-        $VIEW_DATA['types'] = $this->carTypeDao->find();
+        $VIEW_DATA['car'] = $this->carService->getCar($cid);
+        $VIEW_DATA['types'] = $this->carService->getCarTypes();
         return "carDetail.php";
     }
 
@@ -64,7 +56,7 @@ class CarCtrl {
      */
     public function viewAdd() {
         global $VIEW_DATA;
-        $VIEW_DATA['types'] = $this->carTypeDao->find();
+        $VIEW_DATA['types'] = $this->carService->getCarTypes();
         return "carDetail.php";
     }
     
@@ -87,7 +79,7 @@ class CarCtrl {
             "color" => $color, "type" => $type);
 
         // process input
-        $this->carDao->save($car);
+        $this->carService->saveCar($car);
         $cid = $car['id'];
 
         // display output
@@ -117,7 +109,7 @@ class CarCtrl {
         $car = array("id" => $cid, "make" => $make, "model" => $model,
             "year" => $year, "color" => $color);
 
-        $this->carDao->save($car);
+        $this->carService->saveCar($car);
 
         $VIEW_DATA['action'] = 'updated';
         $VIEW_DATA['hl'] = $cid;
@@ -138,10 +130,10 @@ class CarCtrl {
         global $URI_PARAMS;
 
         $cid = $URI_PARAMS[1];
-        $this->carDao->deleteById($cid);
+        $this->carService->deleteCar($cid);
 
         $VIEW_DATA['action'] = 'deleted';
-        return "Location: ../car";
+        return "Location: ../../car";
     }
 
 }

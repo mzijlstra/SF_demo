@@ -1,5 +1,4 @@
 <?php
-require_once 'model/Repository.trait.php';
 
 /**
  * Description of CarDao
