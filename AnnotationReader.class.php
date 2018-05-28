@@ -8,6 +8,7 @@
 
 class AnnotationReader {
 
+    private $inc_path = array();
     private $sec = array();
     private $view_ctrl = array();
     private $get_ctrl = array();
@@ -287,6 +288,7 @@ class AnnotationReader {
      */
     private function scan_classes($directory, $function) {
         set_include_path(get_include_path() . PATH_SEPARATOR . "$directory");
+        $this->inc_path[] = $directory;
         $files = scandir($directory);
         foreach ($files as $file) {
             $mats = array();
@@ -483,8 +485,10 @@ IF_START;
         $this->generate_security_array();
         $this->generate_routing_arrays();
         $this->generate_service_proxies();
+        $path = join(PATH_SEPARATOR, $this->inc_path);
 
         $this->context .= <<< HEADER
+set_include_path(get_include_path() . PATH_SEPARATOR . "$path");
 class Context {
     private \$objects = array();
     

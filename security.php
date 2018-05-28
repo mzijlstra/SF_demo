@@ -73,7 +73,7 @@ if ($role_policy !== 'none') {
         exit();
     }
     if (!isAuthorized($role_policy)) {
-        require "view/error/403.php";
+        require "error/403.php";
         exit();
     }
 }

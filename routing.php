@@ -12,7 +12,7 @@
 function view($data) {
     if (!$data) {
         // page not found (security mapping exists, but no ctrl mapping)
-        htmlmView("error/404.php");
+        htmlView("error/404.php");
     } else if (is_string($data)) {
         htmlView($data);
     } else {
@@ -105,7 +105,7 @@ function invokeMethod($class, $method) {
         return $controler->{$method}();
     } catch (AuthorizationException $e) {
         auditLog("DENIED ACCESS: " . $e->getMessage());
-        return "view/error/403.php";
+        return "error/403.php";
     } catch (Exception $e) {
         error_log($e->getMessage());
         return "error/500.php";

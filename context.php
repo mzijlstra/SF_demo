@@ -108,6 +108,7 @@ class ProxyCarService {
         }
         return $result;    }
 }
+set_include_path(get_include_path() . PATH_SEPARATOR . "./model:./service:./control");                
 class Context {
     private $objects = array();
     
