@@ -113,7 +113,7 @@ function invokeMethod($class, $method) {
 }
 
 // The logic to do the actual routing dispatch, using the above helper functions
-// and the $view_ctrl, $get_ctrl, $post_ctrl arrays from the context
+// and the $routing array from the context
 switch ($MY_METHOD) {
     case "GET":
         // check for redirect flash attributes
@@ -124,19 +124,12 @@ switch ($MY_METHOD) {
             unset($_SESSION['flash_data']);
         }
 
-        // check view controlers
-        foreach ($view_ctrl as $pattern => $file) {
-            if (preg_match($pattern, $MY_URI, $URI_PARAMS)) {
-                view($file);
-            }
-        }
-
         // check get controllers
-        view(matchUriToMethod($get_ctrl));
+        view(matchUriToMethod($routing[$MY_METHOD]));
         break;
     case "POST":
         // check post controlers
-        view(matchUriToMethod($post_ctrl));
+        view(matchUriToMethod($routing[$MY_METHOD]));
         break;
     default:
         view("error/500.php");

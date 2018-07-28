@@ -1,9 +1,9 @@
 <?php
 $security = array(
 	'GET' => array(
+		'|/$|' => 'none',
+		'|/login$|' => 'none',
 		'|/logout$|' => 'none',
-		'|^/login|' => 'none',
-		'|^/$|' => 'none',
 		'|/car$|' => 'user',
 		'|/car/(\d+)|' => 'user',
 		'|/car/add|' => 'admin',
@@ -15,22 +15,23 @@ $security = array(
 		'|/car/(\d+)/del$|' => 'admin',
 	)
 );
-$view_ctrl = array(
-	'|^/login|' => 'login.php',
-	'|^/$|' => 'welcome.php',
-);
-$get_ctrl = array(
+$routing = array(
+	'GET' => array(
 	'|/car$|' => 'CarCtrl@all',
 	'|/car/(\d+)|' => 'CarCtrl@one',
 	'|/car/add|' => 'CarCtrl@viewAdd',
+	'|^/$|' => 'UserCtrl@welcome',
+	'|^/login$|' => 'UserCtrl@get_login',
 	'|^/logout$|' => 'UserCtrl@logout',
-);
-$post_ctrl = array(
+	),
+	'POST' => array(
 	'|/car/add|' => 'CarCtrl@add',
 	'|/car/(\d+)$|' => 'CarCtrl@upd',
 	'|/car/(\d+)/del$|' => 'CarCtrl@del',
 	'|^/login$|' => 'UserCtrl@login',
+	)
 );
+
 class ProxyCarService {
     public $actual;
     public function getCarTypes(){
@@ -108,7 +109,7 @@ class ProxyCarService {
         }
         return $result;    }
 }
-set_include_path(get_include_path() . PATH_SEPARATOR . "./model:./service:./control");                
+set_include_path(get_include_path() . PATH_SEPARATOR . "./model:./service:./control");
 class Context {
     private $objects = array();
     

@@ -10,7 +10,6 @@ class AnnotationReader {
 
     private $inc_path = array();
     private $sec = array();
-    private $view_ctrl = array();
     private $get_ctrl = array();
     private $post_ctrl = array();
     private $repositories = array();
@@ -82,30 +81,6 @@ class AnnotationReader {
             }
         }
         return $result;
-    }
-
-    /**
-     * Validate the content of a @ViewControl annotation
-     * 
-     * @param type $attrs
-     * @param type $doc_com
-     * @throws Exception
-     */
-    private function validate_viewcontrol_annotation(&$attrs, $doc_com) {
-        if (!isset($attrs['uri']) && !isset($attrs['value'])) {
-            throw new Exception("@ViewControl missing uri "
-            . "attribute in: " . $doc_com);
-        }
-        if (!isset($attrs['uri']) && isset($attrs['value'])) {
-            $attrs['uri'] = $attrs['value'];
-        }
-        if (!isset($attrs['sec'])) {
-            $attrs['sec'] = "none";
-        }
-        if (!isset($this->sec['GET'][$attrs["sec"]])) {
-            throw new Exception("Bad sec value in "
-            . "@ViewControl found in: " . $doc_com);
-        }
     }
 
     /**
@@ -217,20 +192,6 @@ class AnnotationReader {
     }
 
     /**
-     * Processes files which were found to have a @ViewControl annotation
-     * 
-     * @param type $doc_com
-     * @param type $file
-     */
-    private function check_viewcontrol($doc_com, $file) {
-        $attrs = $this->annotation_attributes("@ViewControl", $doc_com);
-        $this->validate_viewcontrol_annotation($attrs, $doc_com);
-        // remove 'view/' from file
-        $this->view_ctrl[$attrs["uri"]] = substr($file, 5);
-        $this->sec['GET'][$attrs["sec"]][] = $attrs["uri"];
-    }
-
-    /**
      * Checks if classes have a @Controller or a @WebService annotation, and
      * the processes them as needed
      * 
@@ -246,37 +207,6 @@ class AnnotationReader {
             $this->controllers[$class_name] = $to_inject;
             $this->map_requests($r, "GET", "ctrl");
             $this->map_requests($r, "POST", "ctrl");
-        }
-    }
-
-    /**
-     * Helper to scan the view direcotry for @ViewControl annotations at the
-     * top of view files
-     */
-    private function scan_view($directory) {
-        $files = scandir($directory);
-        foreach ($files as $file) {
-            if ($file{0} === ".") {
-                continue;
-            }
-            // go into and process sub-directories
-            $file_loc = $directory . DIRECTORY_SEPARATOR . $file;
-            if (is_dir($file_loc)) {
-                $this->scan_view($file_loc);
-                continue;
-            }
-
-            $text = file_get_contents($file_loc);
-            $tokens = token_get_all($text);
-
-            // Only look at the first 10 tokens, 
-            // @ViewControl should be near the top of the file
-            for ($i = 0; $i < 10 && $i < count($tokens); $i++) {
-                if (is_array($tokens[$i]) && $tokens[$i][0] === T_DOC_COMMENT &&
-                        preg_match("#@ViewControl\(.*?\)#", $tokens[$i][1])) {
-                    $this->check_viewcontrol($tokens[$i][1], $file_loc);
-                }
-            }
         }
     }
 
@@ -328,27 +258,21 @@ class AnnotationReader {
     }
 
     /**
-     * Generate the code (text) to output the routing arrays:
-     *  - $view_ctrl
-     *  - $get_ctrl
-     *  - $post_ctrl
+     * Generate the code (text) to output the routing array:
      */
     private function generate_routing_arrays() {
-        $this->context .= "\$view_ctrl = array(\n";
-        foreach ($this->view_ctrl as $uri => $file) {
-            $this->context .= "\t'|$uri|' => '$file',\n";
-        }
-        $this->context .= ");\n";
-        $this->context .= "\$get_ctrl = array(\n";
+        $this->context .= "\$routing = array(\n";
+        $this->context .= "\t'GET' => array(\n";
         foreach ($this->get_ctrl as $uri => $method_loc) {
             $this->context .= "\t'|$uri|' => '$method_loc',\n";
         }
-        $this->context .= ");\n";
-        $this->context .= "\$post_ctrl = array(\n";
+        $this->context .= "\t),\n";
+        $this->context .= "\t'POST' => array(\n";
         foreach ($this->post_ctrl as $uri => $method_loc) {
             $this->context .= "\t'|$uri|' => '$method_loc',\n";
         }
-        $this->context .= ");\n";
+        $this->context .= "\t)\n";
+        $this->context .= ");\n\n";
     }
 
     /**
@@ -472,7 +396,6 @@ IF_START;
         $this->scan_classes("./model", "check_repository");
         $this->scan_classes("./service", "check_service");
         $this->scan_classes("./control", "check_controller");
-        $this->scan_view("view");
         return $this;
     }
 

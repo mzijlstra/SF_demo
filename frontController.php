@@ -61,10 +61,9 @@ if (DEVELOPMENT) {
     $ac = new AnnotationReader();
     $ac->scan()->create_context();
     $ac->write("context.php");  # uncomment to generate file
-    eval($ac->context);
-} else {
-    require 'context.php';
-}
+} 
+require 'context.php';
+
 
 // always start the session context
 session_start();

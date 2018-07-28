@@ -7,6 +7,24 @@
  * @Controller
  */
 class UserCtrl {
+    
+    /**
+     * 
+     * @GET(uri="^/$")
+     */
+    public function welcome() {
+        return "welcome.php";
+    }
+    
+    
+    /**
+     * 
+     * @GET(uri="^/login$")
+     */
+    public function get_login() {
+        return "login.php";
+    }
+    
     /**
      * @POST(uri="^/login$")
      * 
