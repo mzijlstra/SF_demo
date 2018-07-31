@@ -79,8 +79,7 @@ class CarCtrl {
             "color" => $color, "type" => $type);
 
         // process input
-        $this->carService->saveCar($car);
-        $cid = $car['id'];
+        $cid = $this->carService->saveCar($car);
 
         // display output
         $VIEW_DATA['action'] = 'added';

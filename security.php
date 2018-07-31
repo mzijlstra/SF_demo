@@ -55,6 +55,10 @@ function auditLog($msg) {
     $ins->execute($data);
 }
 
+global $MY_METHOD;
+global $MY_URI;
+global $MY_BASE;
+
 // find the security policy for the current URI using $security from context
 $role_policy = "none"; // default policy if no URI found
 foreach ($security[$MY_METHOD] as $pattern => $policy) {

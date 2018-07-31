@@ -9,19 +9,13 @@
  * @Repository
  */
 class CarDao {
+
     use Repository;
 
     /**
-     *
-     * @var String name of the table
+     * Constructor
      */
-    private $table = "Car";
-
-    /**
-     *
-     * @var PDO PDO database connection object 
-     * @Inject("DB")
-     */
-    public $db;
-
+    public function CarDao() {
+        $this->table = "Car";
+    }
 }

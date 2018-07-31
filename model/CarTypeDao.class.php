@@ -12,16 +12,9 @@ class CarTypeDao {
     use Repository;
 
     /**
-     *
-     * @var String name of the table
+     * Constructor
      */
-    private $table = "CarType";
-
-    /**
-     *
-     * @var PDO PDO database connection object 
-     * @Inject("DB")
-     */
-    public $db;
-
+    public function CarTypeDao() {
+        $this->table = "CarType";
+    }
 }

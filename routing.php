@@ -7,7 +7,7 @@
 /**
  * Helper function to check what kind of view should be displayed
  * 
- * @param type $data either string for HTML view or data for JSON
+ * @param mixed $data either string for HTML view or data for JSON
  */
 function view($data) {
     if (!$data) {
@@ -88,7 +88,7 @@ function matchUriToMethod($ctrls) {
         }
     }
     // was not able to find a match here
-    return null;
+    return "";
 }
 
 /**

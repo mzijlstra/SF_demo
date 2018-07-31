@@ -17,18 +17,18 @@ $security = array(
 );
 $routing = array(
 	'GET' => array(
-	'|/car$|' => 'CarCtrl@all',
-	'|/car/(\d+)|' => 'CarCtrl@one',
-	'|/car/add|' => 'CarCtrl@viewAdd',
-	'|^/$|' => 'UserCtrl@welcome',
-	'|^/login$|' => 'UserCtrl@get_login',
-	'|^/logout$|' => 'UserCtrl@logout',
+		'|/car$|' => 'CarCtrl@all',
+		'|/car/(\d+)|' => 'CarCtrl@one',
+		'|/car/add|' => 'CarCtrl@viewAdd',
+		'|^/$|' => 'UserCtrl@welcome',
+		'|^/login$|' => 'UserCtrl@get_login',
+		'|^/logout$|' => 'UserCtrl@logout',
 	),
 	'POST' => array(
-	'|/car/add|' => 'CarCtrl@add',
-	'|/car/(\d+)$|' => 'CarCtrl@upd',
-	'|/car/(\d+)/del$|' => 'CarCtrl@del',
-	'|^/login$|' => 'UserCtrl@login',
+		'|/car/add|' => 'CarCtrl@add',
+		'|/car/(\d+)$|' => 'CarCtrl@upd',
+		'|/car/(\d+)/del$|' => 'CarCtrl@del',
+		'|^/login$|' => 'UserCtrl@login',
 	)
 );
 
@@ -124,11 +124,9 @@ class Context {
         }
         if ($id === "CarDao") {
             $this->objects["CarDao"] = new CarDao();
-            $this->objects["CarDao"]->db = $this->get("DB");
         }
         if ($id === "CarTypeDao") {
             $this->objects["CarTypeDao"] = new CarTypeDao();
-            $this->objects["CarTypeDao"]->db = $this->get("DB");
         }
         if ($id === "CarCtrl") {
             $this->objects["CarCtrl"] = new CarCtrl();

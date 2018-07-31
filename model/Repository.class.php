@@ -5,9 +5,17 @@
  * result set.
  */
 class Constraint {
-
+    /**
+     * @var string 
+     */
     public $col; // column
+    /**
+     * @var string
+     */
     public $op; // operator
+    /**
+     * @var string
+     */
     public $val; // value
 
 }
@@ -18,14 +26,18 @@ class Constraint {
  * @author mzijlstra 2018-02-27
  */
 trait Repository {
+    /**
+     * @var string 
+     */
+    private $table;
 
     /**
      * Helper function to turn an array of condition objects into a string
      * 
      * @param array $conditions
-     * @return string SQL for the conditions
+     * @return array<string, string> SQL for the conditions
      */
-    private function columns($conditions) {
+    private function columns(array $conditions) {
         $cols = array();
         $map = array();
         foreach ($conditions as $c) {
@@ -41,9 +53,11 @@ trait Repository {
     /**
      * Helper function to either save or update a single entity
      * 
+     * @global PDO $DB
      * @param array $e an array whose key / value pairs represent an entity
      */
-    private function save_or_update(&$e) {
+    private function save_or_update(array &$e) {
+        global $DB;
         $columns = array();
         foreach (array_keys($e) as $k) {
             $columns[] = "$k = :$k ";
@@ -53,13 +67,13 @@ trait Repository {
         // if an id attribute exists it's been created already
         // and therefore we can savely assume it's an update
         if ($e['id']) {
-            $upd = $this->db->prepare(
+            $upd = $DB->prepare(
                     "UPDATE `{$this->table}` SET $cols WHERE id = :id");
             $upd->execute($e);
         } else {
-            $ins = $this->db->prepare("INSERT INTO `{$this->table}` SET $cols");
+            $ins = $$DB->prepare("INSERT INTO `{$this->table}` SET $cols");
             $ins->execute($e);
-            $e['id'] = $this->db->lastInsertId();
+            $e['id'] = $DB->lastInsertId();
         }
     }
 
@@ -69,7 +83,7 @@ trait Repository {
      * @param array $entity either an array with its key / value pairs 
      * representing a single entity, or an array of such arrays (many entities)
      */
-    public function save(&$entity) {
+    public function save(array &$entity) {
         // check if it has no string keys (an associative array)
         // and that the numbered indexes are sequential (normal array)
         if (count(array_filter(array_keys($entity), 'is_string')) > 0 &&
@@ -87,11 +101,13 @@ trait Repository {
      * it returns all rows. Conditions can be used to restrict rows.
      * 
      * 
+     * @global PDO $DB
      * @param array $columns of Contraint objects 
      * @param array $other key / value pairs giving other constraints (like order and size)
-     * @return PDO resultset (array of arrays)
+     * @return array PDO resultset (array of arrays)
      */
     public function find($columns = Null, $other = Null) {
+        global $DB;
         $query = "SELECT * FROM {$this->table} ";
         $constraints = array();
 
@@ -117,24 +133,26 @@ trait Repository {
                 $query .= " LIMIT :_size ";
             }
         }
-        $find = $this->db->prepare($query);
+        $find = $DB->prepare($query);
         $find->execute($constraints);
         return $find->fetchAll();
     }
 
     /**
      * Find one or more entities by id.
-     * @param Number or array of numbers $id
+     * @global PDO $DB
+     * @param mixed $id number or array of numbers 
      * @return a single result or array of results
      */
     public function findById($id) {
+        global $DB;
         if (is_array($id)) {
-            $find = $this->db->prepare(
+            $find = $DB->prepare(
                     "SELECT * FROM {$this->table} WHERE id IN (:ids)");
             $find->execute(array("ids" => join(",", $id)));
             return $find->fetchAll();
         } else {
-            $find = $this->db->prepare(
+            $find = $DB->prepare(
                     "SELECT * FROM {$this->table} WHERE id = :id");
             $find->execute(array("id" => $id));
             return $find->fetch();
@@ -145,16 +163,18 @@ trait Repository {
      * Returns a count of how many rows in total exist with these conditions. 
      * This is usefull for pagination.
      * 
-     * @param array of Constraint objects $conditions
-     * @return number
+     * @global PDO $DB
+     * @param array $conditions of Constraint objects
+     * @return int
      */
     public function count($conditions = Null) {
+        global $DB;
         $query = "COUNT (*) from {$this->table} ";
         if ($conditions) {
             $cols = $this->columns($conditions);
-            $query .= "WHERE $cols ";
+            $query .= "WHERE {$cols['string']} ";
         }
-        $find = $this->db->prepare($query);
+        $find = $DB->prepare($query);
         $find->execute($conditions);
         return $find->fetch();
     }
@@ -165,21 +185,23 @@ trait Repository {
      * @param array $entity (key value pairs representing an entity)
      */
     public function delete($entity) {
-        $this->deleteById($entity->id);
+        $this->deleteById($entity['id']);
     }
 
     /**
      * Removes the entity/entities with the given id(s) from the database table.
      * 
-     * @param number or array of numbers $id
+     * @global PDO $DB
+     * @param mixed $id or array of numbers $id
      */
     public function deleteById($id) {
+        global $DB;
         if (is_array($id)) {
             $ids = join(",", $id);
         } else {
             $ids = "$id";
         }
-        $del = $this->db->prepare(
+        $del = $DB->prepare(
                 "DELETE FROM {$this->table} WHERE id IN (:ids)");
         $del->execute(array("ids" => $ids));
     }
